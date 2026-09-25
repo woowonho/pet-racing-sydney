@@ -22,16 +22,33 @@ function syncOrientation(){
   if(blocked){clearInput();if(!menu&&race)pause();if(gate&&!gate.open)gate.showModal();}
   else if(gate?.open)gate.close();
 }
-async function enterLandscape(){
+const fullscreenElement=()=>document.fullscreenElement||document.webkitFullscreenElement;
+function fullscreenLabel(){
+  const active=Boolean(fullscreenElement()),button=$('fullscreen');
+  const label=$('fullscreen-label');if(label)label.textContent=active?'화면 축소':'전체화면';
+  button.setAttribute('aria-label',active?'전체화면 종료':'전체화면으로 플레이');
+  button.setAttribute('aria-pressed',String(active));button.title=active?'전체화면 종료':'전체화면으로 플레이';
+}
+async function requestFullscreen(notifyUnavailable=false){
+  const element=document.documentElement,request=element.requestFullscreen||element.webkitRequestFullscreen;
+  try{
+    if(!request)throw new Error('fullscreen unavailable');
+    if(!fullscreenElement())await request.call(element);
+  }catch{
+    if(notifyUnavailable)toast(touchDevice?'전체화면을 지원하지 않는 브라우저예요. 휴대폰을 가로로 돌려 플레이하세요.':'이 브라우저에서는 전체화면을 사용할 수 없어요.',3500);
+  }
+  fullscreenLabel();
+}
+async function enterLandscape({notifyUnavailable=false}={}){
   if(!touchDevice)return;
   // 전체 화면·방향 잠금을 지원하는 브라우저에서만 요청한다. 실패해도 직접 회전해 플레이할 수 있다.
-  try{if(!document.fullscreenElement&&document.documentElement.requestFullscreen)await document.documentElement.requestFullscreen();}catch{}
+  await requestFullscreen(notifyUnavailable);
   try{await screen.orientation?.lock?.('landscape');}catch{}
   syncOrientation();
 }
 let pets,world,race,selected,menu=true,toastTimer=0,countTimer=0,hudClock=0,last=0,wasBoosting=false,wasState='',gamepadSteer=0;
 const audio=new RaceAudio();audio.setMuted(settings.muted);
-const recorded=storage.get('records-sydney-v5',{});
+const recorded=storage.get('records-sydney-v6',{});
 const petById=id=>pets.find(p=>p.id===id)||pets[0];
 function saveSettings(){storage.set('settings-sydney-v4',settings);}
 function toast(text,duration=1600){$('toast').textContent=text;$('toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('show'),duration);}
@@ -42,7 +59,7 @@ function keyboardLabels(){
 function touchLabels(){
   document.body.classList.toggle('auto-drive',autoAccelerate());
   $('touch-mode-guide').textContent='자동 가속 · 왼손 부스터·드리프트 / 오른손 조향';
-  $('touch-help').textContent='가로로 들고 플레이하세요. 오른손으로 ◀ ▶를 누르고 왼손으로 DRIFT를 눌러요. 모아 둔 부스터는 왼쪽 N₂O로 사용해요.';
+  $('touch-help').textContent='가로 모드 · 전체화면을 권장해요. 오른쪽 위 전체화면 버튼을 눌러 화면을 넓히세요. 오른손으로 ◀ ▶, 왼손으로 DRIFT와 N₂O를 사용해요.';
   if(touchDevice){
     $('help-steer-copy').textContent='자동으로 앞으로 달려요. 오른쪽 ◀ ▶ 패드로 조향하고, 손가락을 떼지 않고 반대 패드로 밀면 바로 역조향해요.';
     $('help-drift-copy').textContent='오른손 방향키와 왼손 DRIFT를 함께 누르세요. DRIFT를 놓으면 자세를 회복하고, 반대 방향을 눌러 빠르게 탈출해요. 미끄러짐으로 N₂O를 충전해 최대 2개를 보관해요.';
@@ -64,7 +81,7 @@ async function init(){
     bindControls();resetRace();selectPet(selected,false);drawMap($('track-preview'),false);
     show('loading',false);show('garage');$('start').focus({preventScroll:true});syncOrientation();last=performance.now();requestAnimationFrame(frame);
     // 검증 시 실제 게임 상태와 렌더링 통계를 읽을 수 있는 읽기 전용 관찰 인터페이스.
-    window.petRacing={get state(){return{state:race.state,menu,mobile:{enabled:touchDevice,portrait:portrait(),auto: autoAccelerate(),controls:{...touch}},keyboard:{boostKey:appleKeyboard?'Space':'Control',held:[...keys]},course:world.courseId||'sydney-harbour-v4',pet:selected.id,time:race.time,position:race.position,lap:race.lap,speed:race.player.speed,boost:race.player.boost,boostTime:race.player.boostTime,distance:race.player.distance,lateral:race.player.lateral,screen:{runner:world.screenPosition(race.player.distance,race.player.lateral),center:world.screenPosition(race.player.distance,0)},elevation:world.frameAt(race.player.distance).p.y,grade:world.gradeAt?.(race.player.distance)||0,cameraFov:world.camera.fov,models:world.racerMeshes.map(r=>({type:r.model.mode,vehicle:r.model.usesVehicle,animation:r.model.group.userData.animation,facing:r.model.group.userData.facing})),contacts:race.player.contactCount,lastContact:{time:race.player.lastContactTime,impact:race.player.lastContactImpact},heading:race.player.heading,velocityHeading:race.player.velocityHeading,slipAngle:race.player.slipAngle,drift:race.player.drift,driftPhase:race.player.driftPhase,boostGauge:race.player.boostGauge,boostItems:race.player.boostItems,turnRate:world.turnRateAt(race.player.distance),turnAhead:world.turnRateAt(race.player.distance+race.player.speed*.24),curvature:world.curvatureAt(race.player.distance),driftCharge:race.player.driftCharge,draftCharge:race.player.draftCharge||0,draftTime:race.player.draftTime||0,lapTimes:[...race.lapTimes],length:world.length,renderer:{calls:world.renderer.info.render.calls,triangles:world.renderer.info.render.triangles},racers:race.racers.map(r=>({pet:r.petId,position:r.position,distance:r.distance,finished:r.finished}))};}};
+    window.petRacing={get state(){return{state:race.state,menu,mobile:{enabled:touchDevice,portrait:portrait(),auto: autoAccelerate(),controls:{...touch}},keyboard:{boostKey:appleKeyboard?'Space':'Control',held:[...keys]},course:world.courseId||'sydney-harbour-v6',pet:selected.id,time:race.time,position:race.position,lap:race.lap,speed:race.player.speed,boost:race.player.boost,boostTime:race.player.boostTime,distance:race.player.distance,lateral:race.player.lateral,screen:{runner:world.screenPosition(race.player.distance,race.player.lateral),center:world.screenPosition(race.player.distance,0)},elevation:world.frameAt(race.player.distance).p.y,grade:world.gradeAt?.(race.player.distance)||0,surface:world.surfaceAt(race.player.distance),cameraFov:world.camera.fov,models:world.racerMeshes.map(r=>({type:r.model.mode,vehicle:r.model.usesVehicle,animation:r.model.group.userData.animation,facing:r.model.group.userData.facing})),contacts:race.player.contactCount,lastContact:{time:race.player.lastContactTime,impact:race.player.lastContactImpact},heading:race.player.heading,velocityHeading:race.player.velocityHeading,slipAngle:race.player.slipAngle,drift:race.player.drift,driftPhase:race.player.driftPhase,boostGauge:race.player.boostGauge,boostItems:race.player.boostItems,turnRate:world.turnRateAt(race.player.distance),turnAhead:world.turnRateAt(race.player.distance+race.player.speed*.24),curvature:world.curvatureAt(race.player.distance),driftCharge:race.player.driftCharge,draftCharge:race.player.draftCharge||0,draftTime:race.player.draftTime||0,lapTimes:[...race.lapTimes],length:world.length,renderer:{calls:world.renderer.info.render.calls,triangles:world.renderer.info.render.triangles},racers:race.racers.map(r=>({pet:r.petId,position:r.position,distance:r.distance,finished:r.finished}))};}};
   }catch(error){console.error(error);$('load-message').textContent=error.message;$('loading').querySelector('b').textContent='게임을 시작하지 못했어요';const b=document.createElement('button');b.className='primary';b.textContent='다시 불러오기';b.onclick=()=>location.reload();$('loading').append(b);if(/WebGL/i.test(error.message))$('load-message').textContent='브라우저의 하드웨어 가속을 켜고 다시 실행해 주세요.';}
 }
 function resetRace(){
@@ -86,7 +103,8 @@ function bindControls(){
   document.querySelectorAll('.close-dialog').forEach(b=>b.onclick=()=>b.closest('dialog').close());
   $('pause-dialog').addEventListener('cancel',e=>{e.preventDefault();resume();});$('results-dialog').addEventListener('cancel',e=>e.preventDefault());
   $('sound').onclick=async()=>{if(!audio.context){settings.muted=false;await audio.unlock();}else settings.muted=!settings.muted;if(!settings.muted)await audio.unlock();audio.setMuted(settings.muted);saveSettings();soundLabel();};
-  $('fullscreen').onclick=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else if(touchDevice)await enterLandscape();else await document.documentElement.requestFullscreen();}catch{toast('브라우저 전체 화면 기능을 이용해 주세요.');}};
+  $('fullscreen').onclick=async()=>{try{if(fullscreenElement()){const exit=document.exitFullscreen||document.webkitExitFullscreen;await exit?.call(document);fullscreenLabel();}else if(touchDevice)await enterLandscape({notifyUnavailable:true});else await requestFullscreen(true);}catch{toast('브라우저 전체화면 기능을 이용해 주세요.');}};
+  document.addEventListener('fullscreenchange',fullscreenLabel);document.addEventListener('webkitfullscreenchange',fullscreenLabel);fullscreenLabel();
   $('auto-accelerate').checked=autoAccelerate();$('auto-accelerate').disabled=touchDevice;$('high-quality').checked=settings.high;$('reduce-motion').checked=settings.reduced;document.body.classList.toggle('reduced',settings.reduced);
   $('auto-accelerate').onchange=e=>{settings.auto=e.target.checked;touchLabels();saveSettings();};$('high-quality').onchange=e=>{settings.high=e.target.checked;world.quality(settings.high);saveSettings();};$('reduce-motion').onchange=e=>{settings.reduced=e.target.checked;document.body.classList.toggle('reduced',settings.reduced);saveSettings();};
   const gameKeys=['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','KeyW','KeyA','KeyS','KeyD','ShiftLeft','ShiftRight',...boostKeys];
@@ -106,7 +124,7 @@ function bindControls(){
   if(touchDevice)document.body.classList.add('touch');keyboardLabels();touchLabels();$('touch-controls').addEventListener('contextmenu',e=>e.preventDefault());
   touchInput=bindTouchInput($('touch-controls'),touch,()=>!menu&&!portrait()&&!document.querySelector('dialog[open]'));
   $('landscape-dialog').addEventListener('cancel',event=>event.preventDefault());
-  $('landscape-enter').onclick=enterLandscape;
+  $('landscape-enter').onclick=()=>enterLandscape({notifyUnavailable:true});
   window.addEventListener('resize',syncOrientation);
   screen.orientation?.addEventListener('change',syncOrientation);
   soundLabel();
@@ -136,7 +154,7 @@ function handleEvents(){
 function finishRace(){
   show('countdown',false);show('touch-controls',false);show('pause-button',false);document.body.classList.remove('boosting');
   const total=race.player.finishTime;const key=$('difficulty').value;const isNew=!recorded[key]||total<recorded[key].time;
-  if(isNew){recorded[key]={time:total,pet:selected.id,date:new Date().toISOString()};storage.set('records-sydney-v5',recorded);}
+  if(isNew){recorded[key]={time:total,pet:selected.id,date:new Date().toISOString()};storage.set('records-sydney-v6',recorded);}
   $('result-pet').src=selected.portrait;$('result-position').textContent=race.position;$('result-subtitle').textContent=isNew?'새로운 개인 최고 기록':'레이스 완료';$('result-message').textContent=race.position===1?'서킷의 주인공은 너야.':race.position<=3?'포디움에 올랐어!':'다음 코너에서 뒤집어 보자.';
   $('result-time').textContent=formatTime(total);$('result-best').textContent=formatTime(race.bestLap);
   $('result-laps').innerHTML=race.lapTimes.map((t,i)=>`<span>${i+1} 랩<b>${formatTime(t)}</b></span>`).join('');
@@ -164,7 +182,7 @@ function updateHud(){
   nitroButton.setAttribute('aria-label','부스터 '+p.boostItems+'개');
   $('drive-state').textContent=p.draftTime>0?'슬립스트림 · 가속':p.boostTime>0?'최대 출력 · 부스터':p.drift?'드리프트':p.speed<2?'가속 대기':autoAccelerate()?'자동 달리기':'수동 달리기';
   $('draft-indicator').classList.toggle('hidden',!(p.draftCharge>8||p.draftTime>0));$('draft-fill').style.width=(p.draftTime>0?100:p.draftCharge||0)+'%';
-  $('sector').textContent=world.sectorAt(p.distance);const ahead=world.curvatureAt(p.distance+35),grade=world.gradeAt?.(p.distance)||0;$('corner-hint').textContent=Math.abs(ahead)>.25?(ahead>0?'우회전 코너 ↱':'↰ 좌회전 코너'):grade>.025?'오르막 · 부스터로 가속':grade<-.025?'내리막 · 다음 코너 대비':'직선 구간 · 부스터 타이밍';
+  $('sector').textContent=world.sectorAt(p.distance);const ahead=world.curvatureAt(p.distance+35),grade=world.gradeAt?.(p.distance)||0,surface=world.surfaceAt(p.distance+35);$('corner-hint').textContent=surface.rough>.15?'노면 요철 · 속도에 주의':surface.rolling>.15?'연속 높낮이 · 코너 대비':Math.abs(ahead)>.25?(ahead>0?'우회전 코너 ↱':'↰ 좌회전 코너'):grade>.025?'오르막 · 부스터로 가속':grade<-.025?'내리막 · 다음 코너 대비':'직선 구간 · 부스터 타이밍';
   [...$('lap-dots').children].forEach((e,i)=>e.classList.toggle('done',i<p.lap));
   $('leaderboard').replaceChildren(...[...race.racers].sort((a,b)=>a.position-b.position).map(r=>{const li=document.createElement('li');if(r.id==='player')li.className='me';const b=document.createElement('b');b.textContent=r.position;const img=document.createElement('img');img.src=petById(r.petId).portrait;img.alt='';const span=document.createElement('span');span.textContent=r.id==='player'?'나 · '+r.name:r.name;const small=document.createElement('small');small.textContent=r.id==='player'?'':Math.round((r.distance-p.distance))+'m';li.append(b,img,span,small);return li;}));drawMap($('minimap'),true);
 }

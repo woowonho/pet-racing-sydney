@@ -58,7 +58,7 @@ function sculptedTerrain(world,polygon,bounds,heightAt,material){
 function gableGeometry(){const p=[-1,0,-1,1,0,-1,0,1,-1,-1,0,1,0,1,1,1,0,1,-1,0,-1,0,1,-1,-1,0,1,0,1,-1,0,1,1,-1,0,1,1,0,-1,1,0,1,0,1,-1,0,1,-1,1,0,1,0,1,1];for(let i=0;i<p.length;i+=9)for(let k=0;k<3;k++){const b=p[i+3+k];p[i+3+k]=p[i+6+k];p[i+6+k]=b;}const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.computeVertexNormals();return g;}
 
 export function buildSydneyScenery(world){
-  const {scene}=world,batch=new HarbourBatch(scene);world.landmarks=SYDNEY_LANDMARKS;world.courseId='sydney-harbour-v5';
+  const {scene}=world,batch=new HarbourBatch(scene);world.landmarks=SYDNEY_LANDMARKS;world.courseId='sydney-harbour-v6';
   const steel=world.material('#334953',.58,.48),steelLight=world.material('#61737a',.45,.55),sand=world.material('#cfb18a'),sandLight=world.material('#e4ceb0'),path=world.material('#d3c5a9'),grass=world.material('#76a96a'),grassDark=world.material('#42794e'),leaf=world.material('#3f815c'),leafLight=world.material('#5a9662'),trunk=world.material('#78634a'),white=world.material('#f7f5e5'),navy=world.material('#224e60'),glass=world.material('#54858e',.4,.2),yellow=world.material('#f3c14f');
   grass.map=groundTexture();grass.color.set('#ffffff');path.polygonOffset=true;path.polygonOffsetFactor=0;path.polygonOffsetUnits=3;
   const stoneMap=masonryTexture(),stone=new THREE.MeshStandardMaterial({map:stoneMap,bumpMap:stoneMap,bumpScale:.16,roughness:.91});

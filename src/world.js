@@ -1,7 +1,7 @@
 import * as THREE from '../vendor/three.module.js';
 import {trackFrame, trackCurvature, trackTurnRate} from './track-space.js';
 import {createCharacter} from './characters.js';
-import {createCityTrack} from './city-track.js';
+import {createCityTrack,sydneyRoadFeature} from './city-track.js';
 import {buildSydneyScenery} from './sydney.js';
 import {SpeedFX} from './speed-fx.js';
 
@@ -53,6 +53,7 @@ export class CityWorld {
   }
   turnRateAt(distance) {return trackTurnRate(this.curve,this.length,distance);}
   gradeAt(distance) {const t=this.frameAt(distance).tangent;return t.y/Math.max(.001,Math.hypot(t.x,t.z));}
+  surfaceAt(distance) {const {x,z}=this.frameAt(distance).p;return sydneyRoadFeature(x,z);}
   sectorAt(distance) {
     if(distance<0)return '서큘러 키 출발';
     const t=mod(distance,this.length)/this.length;
@@ -90,12 +91,17 @@ export class CityWorld {
     const c=document.createElement('canvas');c.width=c.height=128;const ctx=c.getContext('2d');
     const g=ctx.createRadialGradient(64,64,0,64,64,64);g.addColorStop(0,color);g.addColorStop(.16,color+'cc');g.addColorStop(.48,color+'44');g.addColorStop(1,color+'00');ctx.fillStyle=g;ctx.fillRect(0,0,128,128);return new THREE.CanvasTexture(c);
   }
-  ribbon(left,right,height,material,{start=0,end=1,segments=1500}={}) {
+  ribbon(left,right,height,material,{start=0,end=1}={}) {
     const p=[],n=[],uv=[],idx=[];
-    for(let i=0;i<=segments;i++) {
-      const d=mix(start,end,i/segments)*this.length;const f=this.frameAt(d);
+    // 포장 색·차선·요철이 같은 도로 단면을 공유해야 언덕에서 서로 뚫고 나오지 않는다.
+    const divisions=this.samples.length-1,stops=[start];
+    for(let step=Math.floor(start*divisions)+1;step<divisions&&step/divisions<end;step++)stops.push(step/divisions);
+    stops.push(end);
+    for(let i=0;i<stops.length;i++) {
+      const d=stops[i]*this.length,u=stops[i]*divisions,k=Math.min(divisions-1,Math.floor(u)),blend=u-k;
+      const a=this.samples[k],b=this.samples[k+1],f={p:a.p.clone().lerp(b.p,blend),right:a.right.clone().lerp(b.right,blend)};
       for(const offset of [left,right]){const v=f.p.clone().addScaledVector(f.right,offset);v.y+=height;p.push(v.x,v.y,v.z);n.push(0,1,0);uv.push(offset===left?0:1,d/15);}
-      if(i<segments){let a=i*2;idx.push(a,a+1,a+2,a+1,a+3,a+2);}
+      if(i<stops.length-1){let a=i*2;idx.push(a,a+1,a+2,a+1,a+3,a+2);}
     }
     const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(n,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));g.setIndex(idx);g.computeVertexNormals();
     const m=this.mesh(g,material);m.material.side=THREE.DoubleSide;m.receiveShadow=true;return m;
@@ -106,6 +112,7 @@ export class CityWorld {
     const tex=new THREE.CanvasTexture(asphalt);tex.wrapS=tex.wrapT=THREE.RepeatWrapping;tex.repeat.set(2,1);tex.colorSpace=THREE.SRGBColorSpace;tex.anisotropy=8;
     this.roadTexture=tex;
     this.ribbon(-11.5,11.5,0,new THREE.MeshStandardMaterial({map:tex,roughness:.95,metalness:0}));
+    this.buildRoughRoad();
     const white=this.material('#d4d0c2'),yellow=this.material('#dfb654');
     this.ribbon(-11.45,-11.2,.025,white);this.ribbon(11.2,11.45,.025,white);
     this.ribbon(-.28,-.15,.026,yellow);this.ribbon(.15,.28,.026,yellow);
@@ -121,6 +128,27 @@ export class CityWorld {
     const arrows=document.createElement('canvas');arrows.width=256;arrows.height=128;const ac=arrows.getContext('2d');ac.fillStyle='#edb743';ac.fillRect(0,0,256,128);ac.strokeStyle='#24262b';ac.lineWidth=22;for(let i=0;i<3;i++){ac.beginPath();ac.moveTo(25+i*78,25);ac.lineTo(55+i*78,64);ac.lineTo(25+i*78,103);ac.stroke();}
     const at=new THREE.CanvasTexture(arrows);at.colorSpace=THREE.SRGBColorSpace;const am=new THREE.MeshBasicMaterial({map:at,side:THREE.DoubleSide});
     for(let d=70;d<this.length;d+=40){const bend=this.curvatureAt(d);if(Math.abs(bend)<.68)continue;const f=this.frameAt(d,-Math.sign(bend)*13.1);const m=this.mesh(new THREE.PlaneGeometry(5,2),am,f.p.toArray());m.position.y+=1.8;m.lookAt(this.frameAt(d-14).p.clone().add(new THREE.Vector3(0,1.8,0)));if(bend<0)m.scale.x=-1;}
+  }
+  buildRoughRoad() {
+    // 도로와 같은 단면을 사용해 요철 위의 보수 포장·가장자리 경고가 뜨지 않게 한다.
+    const positions=[],colors=[],uv=[],indices=[];
+    const add=(a,b,left,right,tint,d,height=.018)=>{
+      const base=positions.length/3,color=new THREE.Color(tint);
+      for(const [frame,offset] of [[a,left],[a,right],[b,left],[b,right]]){
+        const p=frame.p.clone().addScaledVector(frame.right,offset);p.y+=height;
+        positions.push(p.x,p.y,p.z);colors.push(color.r,color.g,color.b);uv.push((offset+11.5)/11.5,(d+(frame===b?this.length/1500:0))/15);
+      }
+      indices.push(base,base+1,base+2,base+1,base+3,base+2);
+    };
+    for(let i=0;i<this.samples.length-1;i++){
+      const a=this.samples[i],b=this.samples[i+1],d=i/1500*this.length;
+      if(sydneyRoadFeature(a.p.x,a.p.z).rough<.1)continue;
+      add(a,b,-11.05,11.05,Math.floor(d/15)%2?'#adb2b0':'#858e8b',d);
+      if(i%3===0){add(a,b,-10.95,-10.25,'#f5d295',d,.022);add(a,b,10.25,10.95,'#f5d295',d,.022);}
+    }
+    const geometry=new THREE.BufferGeometry();
+    geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));geometry.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));geometry.setIndex(indices);geometry.computeVertexNormals();
+    const surface=this.mesh(geometry,new THREE.MeshStandardMaterial({map:this.roadTexture,vertexColors:true,roughness:1,side:THREE.DoubleSide}));surface.receiveShadow=true;
   }
   labelTexture(text,color='#e7ffff') {
     const c=document.createElement('canvas');c.width=1024;c.height=160;const ctx=c.getContext('2d');ctx.fillStyle='#152e42';ctx.fillRect(0,0,c.width,c.height);ctx.fillStyle=color;ctx.fillRect(0,0,14,160);ctx.fillRect(1010,0,14,160);ctx.font='900 73px Arial, sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(text,512,85);const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return t;
