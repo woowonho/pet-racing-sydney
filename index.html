@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b3447"><meta property="og:title" content="펫 레이싱 · 시드니 하버런"><meta property="og:description" content="시드니의 푸른 바다, 하버브리지와 오페라하우스를 달리는 펫 스피드 레이스. 설치 없이 바로 플레이."><meta property="og:type" content="website"><meta name="description" content="내 펫 17종과 함께 달리는 시드니 하버런. 바다 위 서킷에서 즐기는 드리프트와 스핀대시 스피드 레이싱.">
+<title>펫 레이싱 — 시드니 하버런</title>
+<link rel="icon" type="image/png" href="assets/pets/sonic-portrait.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="world" aria-label="시드니 하버런 3D 레이싱 경기장"></canvas>
+<div class="vignette"></div><div id="speed-lines" aria-hidden="true"></div><div id="flash" aria-hidden="true"></div>
+<div id="loading"><div class="load-emblem">≫</div><b>시드니 하버로 이동 중</b><span id="load-message">레이서와 서킷을 준비하고 있어요</span><div class="loading-track"><i></i></div></div>
+<header class="topbar">
+  <a class="brand" href="./" aria-label="펫 레이싱 처음으로"><span class="brand-mark">≫</span> 펫 레이싱 <span class="edition">시드니 하버런</span></a>
+  <div class="top-actions"><button id="sound" class="icon-button" aria-label="소리 켜기" title="소리 켜기">♪<span>소리 켜기</span></button><button id="fullscreen" class="icon-button" aria-label="전체 화면" title="전체 화면">⛶</button><button id="settings-open" class="icon-button" aria-label="설정" title="설정">⚙</button><button id="pause-button" class="icon-button hidden" aria-label="일시정지" title="일시정지 (Esc)">Ⅱ</button></div>
+</header>
+<main id="garage" class="hidden">
+  <section class="race-intro"><div class="eyebrow"><i></i> SYDNEY HARBOUR RUN</div><h1>바다를 가르며.<br><em>시드니를 달려.</em></h1><p>끝없이 펼쳐진 바다, 눈앞의 하버브리지.<br>드리프트로 돌아 나와, 스핀대시로 추월해.</p></section>
+  <section class="track-card"><div class="track-top"><span>선택된 서킷</span><b>01</b></div><canvas id="track-preview" width="260" height="170" aria-label="시드니 하버런 코스 지도"></canvas><h2>시드니 하버런</h2><p>하버브리지 · 오페라하우스</p><div class="track-meta"><span><strong>3</strong> 랩</span><span><strong>8</strong> 레이서</span><span><strong id="track-length">3.2</strong> km</span></div><div class="speed-only">스피드전 <span>드리프트 · 부스터</span></div></section>
+  <div class="selected-tag"><span class="tag-line"></span><div><small>나의 레이서</small><strong id="selected-name">SONIC</strong><span id="selected-power">부스터 특수 동작 · 스핀대시</span></div></div>
+  <section class="garage-dock"><div class="roster-heading"><h2>레이서 선택 <span>17</span></h2><span id="record-label">첫 기록에 도전해 보세요</span></div><div class="dock-content"><div id="roster" role="group" aria-label="펫 레이서 선택"></div><div class="launch-panel"><button id="start" class="primary">레이스 시작 <span>↗</span></button><div class="difficulty-select"><label for="difficulty">AI 난이도</label><select id="difficulty"><option value="easy">루키</option><option value="normal" selected>프로</option><option value="hard">마스터</option></select></div></div></div><div class="garage-footer"><span id="touch-mode-guide" class="touch-only">왼손 부스터·드리프트 · 오른손 조향</span><div class="key-guide"><span><kbd>W</kbd><kbd>↑</kbd> 가속</span><span><kbd>A</kbd><kbd>D</kbd> 조향</span><span><kbd>Shift</kbd> 드리프트</span><span><kbd data-boost-key>Space</kbd> 부스터</span><span><kbd>S</kbd><kbd>↓</kbd> 브레이크</span></div><button id="help-open" class="text-button">처음이라면? 조작 가이드 ↗</button></div></section>
+</main>
+<section id="hud" class="hidden" aria-label="레이스 현황">
+  <div class="race-top-left"><div class="position-box"><strong id="position">1</strong><span>위 <small>/ 8</small></span></div><div class="lap-box"><span>현재 랩</span><b><strong id="lap">1</strong> / 3</b><div id="lap-dots"><i class="done"></i><i></i><i></i></div></div></div>
+  <div class="race-timing"><span>레이스 타임</span><strong id="race-time">00:00.000</strong><small>최고 랩 <b id="best-lap">--:--.---</b></small></div>
+  <div class="minimap-wrap"><canvas id="minimap" width="230" height="200" aria-label="실시간 레이서 위치"></canvas></div>
+  <ol id="leaderboard" aria-label="실시간 순위"></ol>
+  <div class="track-caption"><span>01 — 시드니 하버런</span><strong id="sector">서큘러 키</strong><div id="corner-hint">출발선</div></div>
+  <div id="draft-indicator" class="hidden"><span>슬립스트림</span><div><i id="draft-fill"></i></div></div><div class="boost-cluster"><div class="drift-line"><span id="drift-label">드리프트로 부스터 충전</span><span id="drift-value"></span></div><div class="drift-meter"><i id="drift-fill"></i></div><div class="boost-info"><b id="boost-title">부스터 준비</b><span><kbd data-boost-key>Space</kbd> 사용</span></div><div class="boost-meter"><i id="boost-fill"></i></div><div id="boost-slots"><span><b>N₂O</b><small>1</small></span><span><b>N₂O</b><small>2</small></span></div></div>
+  <div class="speedometer"><div class="speed-num"><strong id="speed">000</strong><span>km/h</span></div><div class="speed-ticks"><i id="speed-fill"></i></div><small id="drive-state">가속 대기</small></div>
+  <div class="race-bottom-hint"><kbd>Shift</kbd> 드리프트 <span>·</span> <kbd data-boost-key>Space</kbd> 부스터 <span>·</span> <kbd>Esc</kbd> 일시정지</div>
+</section>
+<div id="countdown" class="hidden" aria-live="polite"></div><div id="toast" role="status"></div>
+<div id="touch-controls" class="hidden" aria-label="가로 화면 터치 조작">
+  <div class="touch-actions">
+    <button data-touch="throttle" class="hidden" aria-label="가속" tabindex="-1">가속 ↑</button>
+    <button data-touch="brake" aria-label="브레이크"><span class="brake-icon" aria-hidden="true"></span><span class="touch-caption">감속</span></button>
+    <button data-touch="drift" aria-label="드리프트"><svg viewBox="0 0 44 32" aria-hidden="true"><path d="M12 10h14a9 9 0 0 1 0 18H14M16 4l-7 6 7 6"/><path class="drift-trail" d="M5 22h5M3 28h7"/></svg><span class="touch-caption">드리프트</span></button>
+    <button data-touch="boost" id="touch-nitro" class="touch-boost" aria-label="부스터"><b aria-hidden="true">N₂O</b><span class="touch-caption">부스터</span><span id="touch-boost-count" class="touch-count" aria-hidden="true">0</span></button>
+  </div>
+  <div class="touch-steering"><button data-touch="left" aria-label="왼쪽 조향"><span class="steer-chevron" aria-hidden="true"></span></button><button data-touch="right" aria-label="오른쪽 조향"><span class="steer-chevron" aria-hidden="true"></span></button></div>
+</div>
+<dialog id="landscape-dialog" aria-labelledby="landscape-title" aria-describedby="landscape-description">
+  <div class="rotate-device" aria-hidden="true"><span></span><i>↻</i></div>
+  <p class="orientation-eyebrow">시드니 하버런 · 모바일</p><h2 id="landscape-title">휴대폰을 가로로 돌려주세요</h2>
+  <p id="landscape-description">왼손으로 부스터와 드리프트,<br>오른손으로 좌우 방향을 조작해요.</p>
+  <button id="landscape-enter" class="primary">가로 화면으로 시작 <span>↗</span></button>
+  <small>화면 회전 잠금을 해제한 뒤<br>휴대폰을 옆으로 돌려주세요.</small>
+</dialog>
+<dialog id="pause-dialog"><div class="modal-eyebrow">잠깐, 숨 고르기</div><h2>일시정지</h2><p>준비됐다면 다시 서킷으로.</p><button id="resume" class="primary">계속 달리기 ↗</button><button id="restart" class="secondary">처음부터 다시</button><button id="garage-back" class="text-button">레이서 선택으로 돌아가기</button></dialog>
+<dialog id="results-dialog" class="results"><div class="modal-eyebrow">시드니 하버런 · 스피드전</div><div class="result-hero"><img id="result-pet" alt="선택한 레이서"><div><span id="result-subtitle">레이스 완료</span><h2><strong id="result-position">1</strong>위</h2><p id="result-message">멋진 레이스!</p></div></div><div class="result-stats"><div><span>완주 기록</span><b id="result-time"></b></div><div><span>최고 랩</span><b id="result-best"></b></div></div><div id="result-laps"></div><div id="result-standing"></div><div class="result-actions"><button id="race-again" class="primary">다시 도전 ↗</button><button id="result-garage" class="secondary">레이서 변경</button></div></dialog>
+<dialog id="settings-dialog"><div class="modal-heading"><h2>레이스 설정</h2><button class="close-dialog icon-button" aria-label="설정 닫기">×</button></div><label class="setting" id="auto-control-label"><span>자동 가속<small id="auto-control-note">휴대폰 기본 켜짐 · 가속을 누르지 않고 달려요</small></span><input type="checkbox" id="auto-accelerate"></label><label class="setting"><span>고화질<small>선명한 바다와 실시간 그림자</small></span><input type="checkbox" id="high-quality" checked></label><label class="setting"><span>화면 효과 줄이기<small>부스터 시야 확대와 속도선 완화</small></span><input type="checkbox" id="reduce-motion"></label><p class="setting-note">기록과 설정은 이 브라우저에 저장됩니다.</p></dialog>
+<dialog id="help-dialog"><div class="modal-heading"><h2>스피드전 조작</h2><button class="close-dialog icon-button" aria-label="조작 가이드 닫기">×</button></div><p id="touch-help" class="touch-only touch-help">휴대폰은 가로 화면에서 자동으로 달려요. 오른손으로 좌우 방향을 조작하고, 왼손으로 드리프트와 ‘N₂O’ 부스터를 누르세요. 드리프트로 게이지를 채우면 부스터가 충전돼요.</p><div class="help-step"><b>01</b><div><h3>앞을 보고, 원하는 쪽으로.</h3><p id="help-steer-copy"><kbd>↑</kbd>로 가속, <kbd>←</kbd> <kbd>→</kbd>로 조향해요. 방향키를 놓으면 주행 자세가 곧바로 돌아와요. W·A·S·D도 가능하고, 설정에서 자동 가속을 켤 수 있어요.</p></div></div><div class="help-step"><b>02</b><div><h3>코너에서만 깊게 미끄러져.</h3><p id="help-drift-copy">방향키와 <kbd>Shift</kbd>를 눌러 드리프트에 진입해요. Shift를 놓으면 자세를 회복해요. 반대 방향 조향으로 더 빠르게 탈출할 수 있어요. 실제 미끄러짐으로 게이지가 쌓이고, 100%마다 부스터 1개를 얻어요. 최대 2개 보관해요.</p></div></div><div class="help-step"><b>03</b><div><h3>직선에서 한 번에 터뜨려.</h3><p id="help-boost-copy"><kbd data-boost-key>Space</kbd><span data-boost-alternative hidden> 또는 <kbd>Space</kbd></span>로 저장한 부스터를 사용해요. 소닉 계열은 원본 스핀대시로 변해요.</p></div></div><p class="help-note">AI 7명과 3랩 달리기 경쟁. 앞선 주자 뒤를 따라가면 슬립스트림으로 가속해요. 공격 아이템 없이 드리프트와 부스터로 승부합니다.</p><button class="close-dialog primary">준비됐어 ↗</button></dialog>
+<noscript>이 게임을 실행하려면 JavaScript를 켜 주세요.</noscript>
+<script type="module" src="src/main.js"></script>
+</body></html>
