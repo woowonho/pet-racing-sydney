@@ -12,11 +12,20 @@
     "frames": 8,
     "width": 192,
     "height": 224,
-    "boost": "assets/pets/sonic-boost.png",
+    "idleFrameOrder": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
     "rear": "assets/pets/sonic-rear.png",
     "rearFrames": 4,
     "rearWidth": 256,
-    "rearHeight": 320
+    "rearHeight": 320,
+    "boost": "assets/pets/sonic-boost.png"
   },
   {
     "id": "super-sonic",
@@ -31,11 +40,20 @@
     "frames": 8,
     "width": 192,
     "height": 224,
-    "boost": "assets/pets/super-sonic-boost.png",
+    "idleFrameOrder": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
     "rear": "assets/pets/super-sonic-rear.png",
     "rearFrames": 4,
     "rearWidth": 256,
-    "rearHeight": 320
+    "rearHeight": 320,
+    "boost": "assets/pets/super-sonic-boost.png"
   },
   {
     "id": "yongyong",
@@ -50,6 +68,15 @@
     "frames": 8,
     "width": 192,
     "height": 224,
+    "idleFrameOrder": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
     "rear": "assets/pets/yongyong-rear.png",
     "rearFrames": 4,
     "rearWidth": 256,
@@ -69,6 +96,15 @@
     "frames": 8,
     "width": 192,
     "height": 224,
+    "idleFrameOrder": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
     "rear": "assets/pets/saesae-rear.png",
     "rearFrames": 4,
     "rearWidth": 256,
@@ -87,6 +123,15 @@
     "frames": 8,
     "width": 192,
     "height": 224,
+    "idleFrameOrder": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
     "rear": "assets/pets/granzort-rear.png",
     "rearFrames": 4,
     "rearWidth": 256,
@@ -105,6 +150,15 @@
     "frames": 8,
     "width": 192,
     "height": 224,
+    "idleFrameOrder": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
     "rear": "assets/pets/super-granzort-rear.png",
     "rearFrames": 4,
     "rearWidth": 256,
@@ -123,6 +177,15 @@
     "frames": 8,
     "width": 192,
     "height": 224,
+    "idleFrameOrder": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
     "rear": "assets/pets/hyper-granzort-rear.png",
     "rearFrames": 4,
     "rearWidth": 256,
@@ -141,6 +204,15 @@
     "frames": 8,
     "width": 192,
     "height": 224,
+    "idleFrameOrder": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
     "rear": "assets/pets/on-rear.png",
     "rearFrames": 4,
     "rearWidth": 256,
@@ -159,6 +231,15 @@
     "frames": 8,
     "width": 192,
     "height": 224,
+    "idleFrameOrder": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
     "rear": "assets/pets/or-rear.png",
     "rearFrames": 4,
     "rearWidth": 256,
@@ -177,11 +258,20 @@
     "frames": 8,
     "width": 192,
     "height": 224,
-    "boost": "assets/pets/godsonic-boost.png",
+    "idleFrameOrder": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
     "rear": "assets/pets/godsonic-rear.png",
     "rearFrames": 4,
     "rearWidth": 256,
-    "rearHeight": 320
+    "rearHeight": 320,
+    "boost": "assets/pets/godsonic-boost.png"
   },
   {
     "id": "godsonicsuper",
@@ -196,11 +286,20 @@
     "frames": 8,
     "width": 192,
     "height": 224,
-    "boost": "assets/pets/godsonicsuper-boost.png",
+    "idleFrameOrder": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
     "rear": "assets/pets/godsonicsuper-rear.png",
     "rearFrames": 4,
     "rearWidth": 256,
-    "rearHeight": 320
+    "rearHeight": 320,
+    "boost": "assets/pets/godsonicsuper-boost.png"
   },
   {
     "id": "hypersonic",
@@ -215,11 +314,20 @@
     "frames": 8,
     "width": 192,
     "height": 224,
-    "boost": "assets/pets/hypersonic-boost.png",
+    "idleFrameOrder": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
     "rear": "assets/pets/hypersonic-rear.png",
     "rearFrames": 4,
     "rearWidth": 256,
-    "rearHeight": 320
+    "rearHeight": 320,
+    "boost": "assets/pets/hypersonic-boost.png"
   },
   {
     "id": "silversonic",
@@ -234,11 +342,20 @@
     "frames": 8,
     "width": 192,
     "height": 224,
-    "boost": "assets/pets/silversonic-boost.png",
+    "idleFrameOrder": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
     "rear": "assets/pets/silversonic-rear.png",
     "rearFrames": 4,
     "rearWidth": 256,
-    "rearHeight": 320
+    "rearHeight": 320,
+    "boost": "assets/pets/silversonic-boost.png"
   },
   {
     "id": "supersonicgod",
@@ -253,11 +370,20 @@
     "frames": 8,
     "width": 192,
     "height": 224,
-    "boost": "assets/pets/supersonicgod-boost.png",
+    "idleFrameOrder": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
     "rear": "assets/pets/supersonicgod-rear.png",
     "rearFrames": 4,
     "rearWidth": 256,
-    "rearHeight": 320
+    "rearHeight": 320,
+    "boost": "assets/pets/supersonicgod-boost.png"
   },
   {
     "id": "supersonicgold",
@@ -272,11 +398,20 @@
     "frames": 8,
     "width": 192,
     "height": 224,
-    "boost": "assets/pets/supersonicgold-boost.png",
+    "idleFrameOrder": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
     "rear": "assets/pets/supersonicgold-rear.png",
     "rearFrames": 4,
     "rearWidth": 256,
-    "rearHeight": 320
+    "rearHeight": 320,
+    "boost": "assets/pets/supersonicgold-boost.png"
   },
   {
     "id": "supersonichyper",
@@ -291,11 +426,20 @@
     "frames": 8,
     "width": 192,
     "height": 224,
-    "boost": "assets/pets/supersonichyper-boost.png",
+    "idleFrameOrder": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
     "rear": "assets/pets/supersonichyper-rear.png",
     "rearFrames": 4,
     "rearWidth": 256,
-    "rearHeight": 320
+    "rearHeight": 320,
+    "boost": "assets/pets/supersonichyper-boost.png"
   },
   {
     "id": "supersonicsilver",
@@ -310,8 +454,121 @@
     "frames": 8,
     "width": 192,
     "height": 224,
-    "boost": "assets/pets/supersonicsilver-boost.png",
+    "idleFrameOrder": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
     "rear": "assets/pets/supersonicsilver-rear.png",
+    "rearFrames": 4,
+    "rearWidth": 256,
+    "rearHeight": 320,
+    "boost": "assets/pets/supersonicsilver-boost.png"
+  },
+  {
+    "id": "chiikawa",
+    "name": "CHIIKAWA",
+    "color": "#ffc1d2",
+    "sonic": false,
+    "portrait": "assets/pets/chiikawa-portrait.png",
+    "idle": "assets/pets/chiikawa-idle.png",
+    "run": "assets/pets/chiikawa-run.png",
+    "runLeft": "assets/pets/chiikawa-run-left.png",
+    "artMode": "rear-art",
+    "frames": 8,
+    "width": 192,
+    "height": 208,
+    "idleFrameOrder": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "rear": "assets/pets/chiikawa-rear.png",
+    "rearFrames": 4,
+    "rearWidth": 256,
+    "rearHeight": 320
+  },
+  {
+    "id": "usagi",
+    "name": "USAGI",
+    "color": "#ffe69d",
+    "sonic": false,
+    "portrait": "assets/pets/usagi-portrait.png",
+    "idle": "assets/pets/usagi-idle.png",
+    "run": "assets/pets/usagi-run.png",
+    "runLeft": "assets/pets/usagi-run-left.png",
+    "artMode": "rear-art",
+    "frames": 8,
+    "width": 192,
+    "height": 208,
+    "idleFrameOrder": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "rear": "assets/pets/usagi-rear.png",
+    "rearFrames": 4,
+    "rearWidth": 256,
+    "rearHeight": 320
+  },
+  {
+    "id": "hachiware",
+    "name": "HACHIWARE",
+    "color": "#92c8eb",
+    "sonic": false,
+    "portrait": "assets/pets/hachiware-portrait.png",
+    "idle": "assets/pets/hachiware-idle.png",
+    "run": "assets/pets/hachiware-run.png",
+    "runLeft": "assets/pets/hachiware-run-left.png",
+    "artMode": "rear-art",
+    "frames": 8,
+    "width": 192,
+    "height": 208,
+    "idleFrameOrder": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "rear": "assets/pets/hachiware-rear.png",
+    "rearFrames": 4,
+    "rearWidth": 256,
+    "rearHeight": 320
+  },
+  {
+    "id": "momonga",
+    "name": "MOMONGA",
+    "color": "#b5e4f2",
+    "sonic": false,
+    "portrait": "assets/pets/momonga-portrait.png",
+    "idle": "assets/pets/momonga-idle.png",
+    "run": "assets/pets/momonga-run.png",
+    "runLeft": "assets/pets/momonga-run-left.png",
+    "artMode": "rear-art",
+    "frames": 8,
+    "width": 192,
+    "height": 208,
+    "idleFrameOrder": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "rear": "assets/pets/momonga-rear.png",
     "rearFrames": 4,
     "rearWidth": 256,
     "rearHeight": 320

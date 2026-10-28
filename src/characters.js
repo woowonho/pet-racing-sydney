@@ -67,14 +67,19 @@ export function createCharacter(pet, textures) {
     const steer = Number(racer.steer) || 0;
     const moving = !menu && speed > 3;
     const cloud = pet.locomotion === 'cloud';
+    const airborne = !menu && Boolean(racer.airborne);
     const spin = moving && pet.sonic && racer.boostTime > 0 && !!maps.boost;
     // 방향키로 옆모습/앞모습을 갈아끼우지 않는다. 정지·출발 대기 때도 앞을 본다.
     let mapName = menu ? (maps.idle ? 'idle' : 'portrait') : 'rear';
     if (spin) mapName = 'boost';
-    const fps = spin ? 26 : moving ? cloud ? 5 : 7 + clamp(speed / 82, 0, 1.5) * 6 : menu ? 4 : 0;
+    // 공중에서는 발구름 프레임을 멈추고, 소닉의 스핀과 용용이의 구름만 이어간다.
+    const fps = spin ? 26 : airborne && !cloud ? 0 : moving ? cloud ? 5 : 7 + clamp(speed / 82, 0, 1.5) * 6 : menu ? 4 : 0;
     phase += Math.max(0, dt) * fps;
     const frames = frameCount(pet, mapName);
-    const frame = (!menu && !moving) || (reducedMotion && menu) ? 0 : Math.floor(phase) % frames;
+    // 원본 행의 빈 셀은 재생에서만 건너뛰고 아틀라스의 UV 폭은 보존한다.
+    const order=mapName==='idle'&&pet.idleFrameOrder?.length?pet.idleFrameOrder:null;
+    const step=(!menu&&!moving)||(reducedMotion&&menu)?0:Math.floor(phase);
+    const frame=order?order[step%order.length]:step%frames;
     const map = maps[mapName];
     if (lastMap !== mapName) {
       material.map = map;
@@ -89,7 +94,7 @@ export function createCharacter(pet, textures) {
     // 발 구름은 그림의 네 프레임으로 표현하고, 상체만 조향 방향으로 살짝 기울인다.
     const lean = moving && !spin && !reducedMotion ? -steer * ((racer.drift || racer.drifting) ? .105 : .035) : 0;
     material.rotation = THREE.MathUtils.damp(material.rotation, lean, 14, Math.max(0, dt));
-    group.userData.animation = spin ? 'spin-dash' : !menu && cloud ? 'cloud-ride' : moving ? 'running' : 'idle';
+    group.userData.animation = spin ? 'spin-dash' : !menu && cloud ? 'cloud-ride' : airborne ? 'airborne' : moving ? 'running' : 'idle';
     group.userData.frame = frame;
     group.userData.facing = menu ? 'portrait' : 'forward';
     group.userData.texture = mapName;

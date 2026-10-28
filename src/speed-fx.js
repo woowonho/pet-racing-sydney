@@ -69,6 +69,7 @@ export class SpeedFX {
     this.group.visible = false;
     this.elapsed = 0;
     this.wasBoosting = false;
+    this.wasAirborne = false;
     this.boostFade = 0;
     this.emission = 0;
     this.history = [];
@@ -200,6 +201,23 @@ export class SpeedFX {
     particle.kind = spark ? 1 : 0;
     particle.size = spark ? .09 + random * .09 : .42 + random * .18;
     particle.tint.set(this.cloud ? '#edfbff' : spark ? (charged ? '#d9fcff' : '#ffd3a1') : '#c4b4a0');
+    return particle;
+  }
+
+  landingBurst(frame, impact) {
+    const strength = clamp((impact || 8) / 15, .4, 1);
+    for (let i = 0; i < 18; i++) {
+      const particle = this.emitParticle(frame, false);
+      const angle = i * Math.PI * 2 / 18;
+      particle.kind = i % 4 ? 0 : 1;
+      particle.p.copy(frame.p).addScaledVector(frame.right, Math.sin(angle) * .65);
+      particle.p.y += .12;
+      particle.v.copy(frame.right).multiplyScalar(Math.sin(angle) * 7 * strength).addScaledVector(frame.tangent, Math.cos(angle) * 5 * strength);
+      particle.v.y = particle.kind ? 2.4 * strength : .6;
+      particle.size = particle.kind ? .09 : .45;
+      particle.life = .28 + strength * .18;
+      particle.tint.set(particle.kind ? '#ffe6b4' : '#d4e9e9');
+    }
   }
 
   updateTrails() {
@@ -219,7 +237,7 @@ export class SpeedFX {
     };
     for (const side of [-1, 1]) for (let i = 0; i < count - 1; i++) {
       const a = this.history[i], b = this.history[i + 1];
-      if (a.age > .18 || b.age > .18 || a.center.distanceTo(b.center) > 8) break;
+      if (a.age > .18 || b.age > .18 || a.center.distanceTo(b.center) > 20) break;
       const fa = clamp(a.age / .18, 0, 1), fb = clamp(b.age / .18, 0, 1);
       addVertex(a, side, -1, fa); addVertex(b, side, -1, fb); addVertex(a, side, 1, fa);
       addVertex(a, side, 1, fa); addVertex(b, side, -1, fb); addVertex(b, side, 1, fb);
@@ -240,9 +258,12 @@ export class SpeedFX {
     this.elapsed += dt;
     const player = race.player;
     this.cloud = player.petId === 'yongyong';
-    const boosting = player.boostTime > 0 && player.speed > 12;
-    const drifting = (player.drift || player.drifting) && player.speed > 16;
-    const frame = this.world.frameAt(player.distance, player.lateral);
+    const boosting = (player.boostTime > 0 || player.speed > 145) && player.speed > 12;
+    const drifting = (player.drift || player.drifting) && player.speed > 16 && !player.airborne;
+    const frame = this.world.frameAtRacer(player);
+    if (this.wasAirborne && !player.airborne) this.landingBurst(frame, player.landingImpact);
+    this.wasAirborne = Boolean(player.airborne);
+    frame.p.y += player.jumpHeight || 0;
     const root = this.world.racerMeshes[0].model.group;
     const source = root.children.find(child => child.isSprite && child.material.map);
     if (!source) {this.reset(); return;}
@@ -283,9 +304,10 @@ export class SpeedFX {
       ring.mesh.material.uniforms.opacity.value = (1 - t) ** 2 * .34;
     }
 
-    this.emission += drifting ? dt * 64 : this.cloud && player.speed > 8 ? dt * 14 : 0;
+    const slip = clamp(Math.abs(player.slipAngle || 0) / .38, .2, 1);
+    this.emission += drifting ? dt * (25 + slip * 55) : this.cloud && player.speed > 8 ? dt * 14 : 0;
     while (this.emission >= 1) {
-      this.emitParticle(frame, (player.driftCharge || 0) >= 60);
+      this.emitParticle(frame, (player.driftQuality || 0) >= .7 || (player.driftCharge || 0) >= 60);
       this.emission--;
     }
     if (!drifting && !this.cloud) this.emission = 0;
@@ -316,6 +338,7 @@ export class SpeedFX {
     this.group.visible = false;
     this.history.length = 0;
     this.wasBoosting = false;
+    this.wasAirborne = false;
     this.boostFade = 0;
     this.emission = 0;
     for (const echo of this.echoes) echo.visible = false;

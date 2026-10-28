@@ -1,4 +1,21 @@
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+const MUSIC_BPM = 160;
+const SIXTEENTH = 60 / MUSIC_BPM / 4;
+const MAX_MUSIC_VOICES = 48;
+const MAX_VOICES = 72;
+const MUSIC_VOLUME = 1.2;
+const midi = note => 440 * 2 ** ((note - 69) / 12);
+
+// 같은 박자 위에서 드럼·베이스·멜로디의 역할을 바꾼다. 원작 음원의 샘플은 쓰지 않는다.
+const GROOVES = {
+  'harbour-hop': { kicks:[[0,6,10],[0,7,10,15]], snares:[4,12], bass:[0,6,10,14], notes:[1,5,10,14], swing:.13, wave:'triangle', cutoff:1550, register:-12 },
+  'desert-trap': { kicks:[[0,6,11],[0,3,10,14]], snares:[8], bass:[0,6,11], notes:[2,7,10,14], swing:.04, wave:'sine', cutoff:2600, register:0, sub:true, rolls:true },
+  'factory-breaks': { kicks:[[0,3,6,10],[0,7,8,14]], snares:[4,12], bass:[0,3,6,10,14], notes:[0,3,6,11,14], swing:0, wave:'sawtooth', cutoff:2100, register:-12, breaks:true },
+  'ice-breaks': { kicks:[[0,6,10],[0,7,8,14]], snares:[4,12], bass:[0,6,10], notes:[2,6,9,14], swing:0, wave:'triangle', cutoff:3400, register:0, breaks:true, air:true },
+  'sky-breaks': { kicks:[[0,6,8,14],[0,3,10,15]], snares:[4,12], bass:[0,6,8,14], notes:[0,3,6,10,14], swing:0, wave:'sawtooth', cutoff:2800, register:0, breaks:true, air:true },
+  'reef-flow': { kicks:[[0,6,10],[0,7,8,14]], snares:[4,12], bass:[0,6,10,14], notes:[1,6,10,13], swing:.07, wave:'triangle', cutoff:2400, register:0, air:true },
+  'mach-half': { kicks:[[0,6,11],[0,3,10,14]], snares:[8], bass:[0,6,11,14], notes:[3,10,14], swing:0, wave:'sawtooth', cutoff:950, register:-12, sub:true, rolls:true },
+};
 
 // 외부 음원 없이 만드는 발구름, 바람, 부스터 효과음과 해안 레이싱 음악.
 export class RaceAudio {
@@ -12,6 +29,11 @@ export class RaceAudio {
     this._nextMusicTime = 0;
     this._nextStrideTime = 0;
     this._strideStep = 0;
+    this._musicSection = 'intro';
+    this._musicStyle = null;
+    this._styleTransitionBar = -1;
+    this._musicIntensity = 0;
+    this._musicDuckUntil = 0;
     this._lastEvents = new Map();
     this._voices = new Set();
     this._state = { speed: 0, boost: false, drifting: false, racing: false };
@@ -60,14 +82,33 @@ export class RaceAudio {
     limiter.attack.value = 0.005;
     limiter.release.value = 0.19;
     master.connect(limiter).connect(context.destination);
+    this._recordOutput = limiter;
     this._master = master;
 
     this._musicBus = context.createGain();
     this._musicBus.gain.value = 0;
-    this._musicBus.connect(master);
+    this._musicTransitionGain=context.createGain();
+    this._musicTransitionGain.gain.value=1;
+    this._musicBus.connect(this._musicTransitionGain).connect(master);
+    // 악기만 짧게 되돌리는 음악 딜레이. 효과음 반사음과 분리해 드리프트 판정을 가리지 않는다.
+    if (context.createDelay) {
+      this._musicDelay = context.createDelay(0.4);
+      this._musicDelay.delayTime.value = SIXTEENTH * 3;
+      this._musicEcho = context.createGain();
+      this._musicEcho.gain.value = 0.07;
+      this._musicTransitionGain.connect(this._musicDelay).connect(this._musicEcho).connect(master);
+    }
     this._effectsBus = context.createGain();
     this._effectsBus.gain.value = 0.68;
     this._effectsBus.connect(master);
+    // 터널에서만 짧은 반사음을 더해 야외와 실내의 속도감을 구분한다.
+    if (context.createDelay) {
+      this._tunnelDelay = context.createDelay(0.3);
+      this._tunnelDelay.delayTime.value = 0.085;
+      this._tunnelEcho = context.createGain();
+      this._tunnelEcho.gain.value = 0;
+      this._effectsBus.connect(this._tunnelDelay).connect(this._tunnelEcho).connect(master);
+    }
 
     this._noiseBuffer = context.createBuffer(1, context.sampleRate * 2, context.sampleRate);
     const noise = this._noiseBuffer.getChannelData(0);
@@ -84,7 +125,17 @@ export class RaceAudio {
     this._energyGain.gain.value = 0;
     this._energyGain.connect(this._effectsBus);
     this._energy = this._continuousOscillator('sine', 195, 0.34, this._energyGain);
-    this._timer = globalThis.setInterval(() => this._scheduleMusic(), 70);
+    if (context.startRendering === undefined) this._timer = globalThis.setInterval(() => this._scheduleMusic(), 70);
+  }
+
+  capture() {
+    if (this.context?.state !== 'running' || !this.context.createMediaStreamDestination || !this._recordOutput) return null;
+    const destination = this.context.createMediaStreamDestination();
+    this._recordOutput.connect(destination);
+    return {stream: destination.stream, release: () => {
+      try { this._recordOutput.disconnect(destination); } catch { /* 이미 해제된 연결 */ }
+      destination.stream.getTracks().forEach(track => track.stop());
+    }};
   }
 
   _continuousNoise(type, frequency, resonance) {
@@ -122,13 +173,14 @@ export class RaceAudio {
     this._applyState();
   }
 
-  update({ speed = 0, boost = false, drifting = false, racing = false, hovering = false } = {}, dt = 0) {
-    this._state = { speed, boost, drifting, racing, hovering };
+  update({ speed = 0, boost = false, drifting = false, racing = false, hovering = false, airborne = false, tunnel = false, driftQuality = 0, slipAngle = 0,
+    progress = 0, featureKind = '', regionKind = '', rivalGap = Infinity, intensity = null } = {}, dt = 0) {
+    this._state = { speed, boost, drifting, racing, hovering, airborne, tunnel:tunnel||featureKind==='tunnel', driftQuality, slipAngle,
+      progress:clamp(Number(progress)||0,0,1),featureKind,regionKind:String(regionKind||'').toLowerCase(),rivalGap:Number.isFinite(rivalGap)?Math.abs(rivalGap):Infinity,intensity };
     if (!this.context || this._disposed) return;
     if (Boolean(racing) !== this._racing) {
       this._racing = Boolean(racing);
       if (this._racing) {
-        this._musicStep = 0;
         this._nextMusicTime = this.context.currentTime + 0.06;
         this._nextStrideTime = this.context.currentTime + 0.06;
         this._strideStep = 0;
@@ -142,25 +194,33 @@ export class RaceAudio {
 
   _applyState() {
     if (!this.context || this._disposed) return;
-    const { speed, boost, drifting, racing } = this._state;
+    const { speed, boost, drifting, racing, airborne, tunnel, driftQuality, slipAngle } = this._state;
     const normalizedSpeed = clamp(Math.abs(Number(speed) || 0) / 430, 0, 1.15);
     const active = Boolean(racing) && !this._hidden;
     this._racing = Boolean(racing);
     // 평상시에는 발구름이 들리고 속도가 붙을수록 넓고 부드러운 바람이 차오른다.
-    this._target(this._wind.gain.gain, active ? normalizedSpeed ** 1.5 * 0.064 + (boost ? 0.062 : 0) : 0, 0.14);
+    this._target(this._wind.gain.gain, active ? normalizedSpeed ** 1.5 * 0.064 + (boost ? 0.062 : 0) + (airborne ? .03 : 0) : 0, 0.14);
     this._target(this._wind.filter.frequency, 550 + normalizedSpeed * 1550 + (boost ? 1000 : 0), 0.1);
-    this._target(this._slide.gain.gain, active && drifting ? normalizedSpeed * 0.068 : 0, 0.065);
-    this._target(this._slide.filter.frequency, 1000 + normalizedSpeed * 1200, 0.1);
+    const slip = clamp(Math.abs(slipAngle || 0) / .35, 0, 1);
+    this._target(this._slide.gain.gain, active && drifting && !airborne ? normalizedSpeed * (.023 + slip * .065) : 0, 0.035);
+    this._target(this._slide.filter.frequency, 760 + normalizedSpeed * 700 + slip * 1100 + (driftQuality || 0) * 350, 0.045);
+    if (this._tunnelEcho) this._target(this._tunnelEcho.gain, active && tunnel ? .21 : 0, .16);
     this._target(this._energy.frequency, 175 + normalizedSpeed * 75, 0.16);
     this._target(this._energyGain.gain, active && boost ? 0.045 : 0, 0.08);
-    this._target(this._musicBus.gain, active && !this.muted ? 0.6 : 0, 0.15);
+    const closeRace = this._state.rivalGap < 35 ? 1-this._state.rivalGap/35 : 0;
+    const requestedIntensity = Number.isFinite(this._state.intensity) ? this._state.intensity
+      : .38 + normalizedSpeed*.27 + (boost?.16:0) + closeRace*.12 + this._state.progress*.16;
+    this._musicIntensity += (clamp(requestedIntensity,0,1)-this._musicIntensity)*.06;
+    const duck = this.context.currentTime < this._musicDuckUntil ? .38 : 1;
+    this._target(this._musicBus.gain, active && !this.muted ? MUSIC_VOLUME*duck : 0, 0.08);
+    if(this._musicEcho)this._target(this._musicEcho.gain,active&&tunnel?.14:.065,.25);
   }
 
   _scheduleStride() {
     if (!this.context || this.context.state !== 'running') return;
     const { speed, boost, drifting, racing } = this._state;
     const now = this.context.currentTime;
-    if (!racing || this.muted || this._hidden || this._state.hovering || boost || drifting || Math.abs(speed) < 22) {
+    if (!racing || this.muted || this._hidden || this._state.hovering || this._state.airborne || boost || drifting || Math.abs(speed) < 22) {
       this._nextStrideTime = now + 0.08;
       return;
     }
@@ -190,8 +250,20 @@ export class RaceAudio {
     };
   }
 
+  _canPlayVoice(kind) {
+    if(this._disposed||!this.context)return false;
+    const music=[...this._voices].filter(voice=>voice.kind==='music');
+    if(kind==='music')return music.length<MAX_MUSIC_VOICES&&this._voices.size<MAX_VOICES;
+    if(this._voices.size<MAX_VOICES)return true;
+    const quiet=music[0];
+    if(!quiet)return false;
+    try{quiet.source.stop(this.context.currentTime+.01);}catch{/* 이미 종료된 음원 */}
+    this._voices.delete(quiet);
+    return true;
+  }
+
   _tone(frequency, when, duration, amplitude, type = 'sine', kind = 'effect', endFrequency = frequency, pan = 0) {
-    if (this._disposed || !this.context) return;
+    if (!this._canPlayVoice(kind)) return;
     const context = this.context;
     const oscillator = context.createOscillator();
     const envelope = context.createGain();
@@ -218,7 +290,7 @@ export class RaceAudio {
   }
 
   _noise(when, duration, amplitude, frequency, kind = 'effect', endFrequency = frequency) {
-    if (this._disposed || !this.context) return;
+    if (!this._canPlayVoice(kind)) return;
     const source = this.context.createBufferSource();
     source.buffer = this._noiseBuffer;
     const filter = this.context.createBiquadFilter();
@@ -236,12 +308,40 @@ export class RaceAudio {
     source.stop(when + duration + 0.02);
   }
 
-  event(name) {
+  _synth(note, when, duration, amplitude, cutoff = 1800, pan = 0, type = 'sawtooth') {
+    if(!this._canPlayVoice('music'))return;
+    const context=this.context,source=context.createOscillator(),filter=context.createBiquadFilter(),gain=context.createGain();
+    source.type=type;source.frequency.setValueAtTime(midi(note),when);
+    filter.type='lowpass';filter.Q.value=.8;
+    filter.frequency.setValueAtTime(cutoff,when);
+    filter.frequency.exponentialRampToValueAtTime(Math.max(180,cutoff*.24),when+duration);
+    gain.gain.setValueAtTime(0,when);gain.gain.linearRampToValueAtTime(amplitude,when+.007);
+    gain.gain.exponentialRampToValueAtTime(.0001,when+duration);
+    source.connect(filter).connect(gain);
+    const nodes=[filter,gain];
+    if(context.createStereoPanner&&pan){const panner=context.createStereoPanner();panner.pan.value=pan;gain.connect(panner).connect(this._musicBus);nodes.push(panner);}
+    else gain.connect(this._musicBus);
+    this._trackVoice(source,nodes,'music');source.start(when);source.stop(when+duration+.02);
+  }
+
+  beginRace() {
+    this._musicStep=0;this._musicSection='intro';this._musicIntensity=0;this._strideStep=0;
+    this._arrangement=null;this._musicStyle=null;this._styleTransitionBar=-1;this._machTransition=false;
+    if(this._musicTransitionGain){this._musicTransitionGain.gain.cancelScheduledValues?.(this.context.currentTime);this._musicTransitionGain.gain.setValueAtTime(1,this.context.currentTime);}
+    if(this.context){this._silenceMusic();this._nextMusicTime=this.context.currentTime+.12;}
+  }
+
+  event(name, detail = {}) {
+    if(name==='go')this.beginRace();
     if (!this.context || this.context.state !== 'running' || this.muted || this._disposed || this._hidden) return;
     const now = this.context.currentTime;
     const minimumGap = name === 'wall' || name === 'contact' ? 0.32 : name === 'boost' ? 0.18 : 0.06;
     if (now - (this._lastEvents.get(name) ?? -Infinity) < minimumGap) return;
     this._lastEvents.set(name, now);
+    if(['boost','wall','contact','checkpoint','finish'].includes(name)) {
+      this._musicDuckUntil=now+(name==='finish'?2:.38);
+      this._target(this._musicBus.gain,this._racing?MUSIC_VOLUME*.38:0,.015);
+    }
     const at = now + 0.005;
     switch (name) {
       case 'count':
@@ -257,11 +357,33 @@ export class RaceAudio {
         this._tone(220, at + 0.025, 0.36, 0.04, 'sine', 'effect', 1100);
         this._noise(at, 0.54, 0.2, 700, 'effect', 4200);
         break;
-      case 'drift-release':
-        this._tone(440, at, 0.16, 0.075, 'triangle', 'effect', 880);
-        this._tone(880, at + 0.055, 0.25, 0.065, 'sine', 'effect', 1320);
-        this._noise(at, 0.18, 0.06, 3200, 'effect', 1000);
+      case 'drift-start':
+        this._noise(at, .075, .055, 1700, 'effect', 2800);
         break;
+      case 'drift-link':
+        this._noise(at, .12, .07, 2600, 'effect', 1000);
+        this._tone(660, at, .11, .035, 'sine', 'effect', 830);
+        break;
+      case 'drift-charge':
+        [880, 1174.66, 1567.98].forEach((frequency,index)=>this._tone(frequency,at+index*.045,.2,.065,'sine'));
+        break;
+      case 'drift-release':
+        this._noise(at, .14, .04, 2700, 'effect', 800);
+        if ((detail.quality || 0) > .55) {
+          this._tone(660, at, .13, .045, 'sine', 'effect', 990);
+          this._tone(990, at + .045, .18, .035, 'sine', 'effect', 1320);
+        }
+        break;
+      case 'jump':
+        this._noise(at, .32, .11, 600, 'effect', 3000);
+        this._tone(175, at, .21, .055, 'sine', 'effect', 420);
+        break;
+      case 'land': {
+        const power = clamp((Number(detail.impact) || 8) / 15, .35, 1);
+        this._tone(100, at, .19, .14 * power, 'sine', 'effect', 35);
+        this._noise(at, .19, .14 * power, 800, 'effect', 170);
+        break;
+      }
       case 'wall':
         this._noise(at, 0.16, 0.18, 450, 'effect', 140);
         this._tone(100, at, 0.19, 0.14, 'triangle', 'effect', 30);
@@ -273,10 +395,14 @@ export class RaceAudio {
       case 'lap':
         [523.25, 659.25, 783.99, 1046.5].forEach((frequency, index) => this._tone(frequency, at + index * 0.07, 0.32, 0.095, 'sine'));
         break;
+      case 'checkpoint':
+        [73,80,85].forEach((note,index)=>this._tone(midi(note),at+index*SIXTEENTH,.23,.082,'triangle'));
+        this._noise(at,.1,.04,6400,'effect',2800);
+        break;
       case 'finish':
         this._silenceMusic();
-        [523.25, 659.25, 783.99, 1046.5, 987.77, 1046.5].forEach((frequency, index) => this._tone(frequency, at + index * 0.13, index === 5 ? 1.3 : 0.42, 0.115, 'triangle'));
-        [261.63, 329.63, 392].forEach(frequency => this._tone(frequency, at + 0.65, 1.45, 0.06, 'sine'));
+        [73,76,80,85,83,85].forEach((note,index)=>this._tone(midi(note),at+index*SIXTEENTH*2,index===5?1.3:.35,.095,'triangle'));
+        [49,56,61,68].forEach((note,index)=>this._tone(midi(note),at+SIXTEENTH*8,1.6,.04,'sine','effect',midi(note),(index-1.5)*.3));
         break;
       case 'select':
         this._tone(740, at, 0.075, 0.06, 'sine', 'effect', 980);
@@ -286,44 +412,116 @@ export class RaceAudio {
     }
   }
 
+  _selectArrangement(step) {
+    const bar=Math.floor(step/16),phrase=bar%64;
+    const finale=this._state.progress>=.8;
+    const section=finale?'climax':this._state.tunnel?'tunnel':bar<8?'intro':phrase>=24&&phrase<32?'build':phrase>=32&&phrase<48?'drop':phrase>=48&&phrase<56?'bridge':'drive';
+    const region=this._state.regionKind||'';
+    const style=this._state.featureKind==='dash'?'mach-half':/factory|red-cliff/.test(region)?'factory-breaks'
+      :/ice|snow/.test(region)?'ice-breaks':/desert|sand/.test(region)?'desert-trap'
+      :/sky|space/.test(region)?'sky-breaks':/reef|aqua/.test(region)?'reef-flow':'harbour-hop';
+    return {bar,phrase,section,style,full:!['intro','bridge','build'].includes(section),intensity:this._musicIntensity};
+  }
+
   _scheduleMusic() {
     if (!this.context || this.context.state !== 'running' || !this._racing || this.muted || this._hidden || this._disposed) return;
-    const now = this.context.currentTime;
-    if (this._nextMusicTime < now - 0.1) this._nextMusicTime = now + 0.04;
-    // 146 BPM의 저음 리듬과 빠른 퍼커션 위에 해안 질주의 멜로디를 얹는다.
-    const eighth = 60 / 146 / 2;
-    while (this._nextMusicTime < now + 0.17) {
-      const step = this._musicStep % 64;
-      const bar = Math.floor(step / 16);
-      const inBar = step % 16;
-      const time = this._nextMusicTime;
-      const bassRoots = [36, 31, 33, 29];
-      const chords = [[60, 64, 67, 71], [59, 62, 67, 69], [60, 64, 69, 71], [57, 60, 64, 67]];
-      const motif = [12, null, 7, 4, null, 7, 11, null, 7, null, 4, 2, null, 4, 7, null];
-      const midi = note => 440 * Math.pow(2, (note - 69) / 12);
-      if (inBar % 4 === 0 || inBar === 7 || inBar === 14) {
-        this._tone(midi(bassRoots[bar]), time, 0.27, 0.105, 'triangle', 'music');
-      }
-      if (inBar === 0 || inBar === 8) {
-        chords[bar].forEach((note, index) => {
-          this._tone(midi(note), time + index * 0.012, 1.35, 0.017, 'sine', 'music', midi(note), (index - 1.5) * 0.3);
-        });
-      }
-      if (motif[inBar] !== null) {
-        const note = chords[bar][0] + motif[inBar];
-        this._tone(midi(note), time, 0.25, inBar % 4 === 0 ? 0.05 : 0.035, 'sine', 'music', midi(note), inBar % 2 ? -0.32 : 0.32);
-        // 조용한 지연 음으로 넓은 야외 공간감을 만든다.
-        this._tone(midi(note), time + eighth * 1.5, 0.25, 0.01, 'sine', 'music', midi(note), inBar % 2 ? 0.38 : -0.38);
-      }
-      if (inBar % 2 === 0) this._tone(125, time, 0.16, inBar % 4 === 0 ? 0.16 : 0.105, 'sine', 'music', 43);
-      if (inBar % 8 === 4) {
-        this._noise(time, 0.12, 0.055, 2000, 'music');
-        this._tone(175, time, 0.065, 0.035, 'triangle', 'music', 115);
-      }
-      this._noise(time, inBar === 15 ? 0.10 : 0.035, inBar % 2 ? 0.032 : 0.014, 7600, 'music');
-      this._musicStep += 1;
-      this._nextMusicTime += eighth;
+    const now=this.context.currentTime;
+    if(this._nextMusicTime<now-.1)this._nextMusicTime=now+.04;
+    // 160 BPM은 끝까지 고정한다. 속도·순위는 편곡에만 반영해 주행 중 박자가 흔들리지 않는다.
+    let scheduled=0;
+    while(this._nextMusicTime<now+.17&&scheduled++<4) {
+      this._musicTick(this._musicStep,this._nextMusicTime);
+      this._musicStep++;
+      this._nextMusicTime+=SIXTEENTH;
     }
+  }
+
+  _musicTick(step,time) {
+    const beat=step%16;
+    if(beat===0||!this._arrangement) {
+      const next=this._selectArrangement(step);
+      if(this._musicStyle!==next.style) {
+        this._styleTransitionBar=next.bar;
+        this._machTransition=this._musicStyle!==null&&(next.style==='mach-half'||this._musicStyle==='mach-half');
+        if(this._machTransition&&this._musicTransitionGain){
+          // 앞 마디의 패드·808 잔향도 함께 내려 실제로 쉼이 들리게 한다.
+          const gain=this._musicTransitionGain.gain;
+          gain.setValueAtTime(.08,time);gain.setValueAtTime(.08,time+SIXTEENTH*3);
+          gain.linearRampToValueAtTime(1,time+SIXTEENTH*4);
+        }
+        this._musicStyle=next.style;
+      }
+      this._arrangement=next;
+    }
+    const {bar,phrase,section,style,full,intensity}=this._arrangement;
+    this._musicSection=section;
+    const groove=GROOVES[style],transition=this._styleTransitionBar===bar;
+    const harmony=Math.floor(bar/2)%8,variation=Math.floor(bar/8)%4;
+    const roots=[37,33,40,35,37,44,33,35];
+    const chords=[[61,64,68,71],[57,61,64,68],[64,68,71,75],[59,63,66,73],[61,64,68,75],[56,61,64,68],[57,61,64,71],[59,63,66,73]];
+    const chord=chords[harmony],root=roots[harmony];
+    const intro=section==='intro',bridge=section==='bridge',build=section==='build';
+    const drop=section==='drop'||section==='tunnel'||section==='climax'||style==='mach-half';
+    const energy=(drop?1:full?.86:build?.7:.52)*(.82+intensity*.18);
+    // 마하 진입·탈출에서는 한 박만 비워 공기 소리를 드러내고 다음 박의 킥으로 다시 붙인다.
+    // 지역 전환은 마디 경계에서만 일어나 프레임 속도나 경계 흔들림으로 박자가 깨지지 않는다.
+    if(transition&&this._machTransition&&beat<4) {
+      if(beat===0)this._noise(time,.32,.026,style==='mach-half'?3800:1000,'music',style==='mach-half'?650:6200);
+      return;
+    }
+    const hit=time+(beat%2?SIXTEENTH*groove.swing:0);
+    const motif=[
+      [12,null,7,null,9,7,null,4,7,null,4,null,2,null,4,7],
+      [7,null,12,11,null,7,4,null,7,9,null,12,null,11,7,null],
+      [4,7,null,12,null,11,7,null,9,null,7,4,null,2,4,null],
+      [12,null,11,7,9,null,7,null,4,7,9,null,12,11,7,null],
+    ][variation];
+    // 두 마디마다 화성을 바꾸고 8마디마다 멜로디를 교대해 긴 마라톤에서도 네 마디를 반복하지 않는다.
+    if(beat===0&&(bar%2===0||bridge))chord.forEach((note,index)=>{
+      this._tone(midi(note-12),time+index*.012,bridge?1.4:1.65,intro?.018:groove.air?.014:.01,'sine','music',midi(note-12),(index-1.5)*.34);
+    });
+    const reentry=transition&&this._machTransition&&beat===4;
+    if(!intro||bar>=4||style==='mach-half') {
+      if((groove.bass.includes(beat)||reentry)&&(!bridge||beat%4===0)&&(!build||beat<12)) {
+        const note=root+(beat===14&&bar%2?7:0),duration=groove.sub?.43:groove.breaks?.18:.28;
+        this._synth(note,hit,duration,groove.sub?.039*energy:.065*energy,groove.sub?480:drop?880:620,0,'triangle');
+        // 808 저음은 킥과 떨어진 엇박에서만 짧게 미끄러져 속도감과 무게를 함께 만든다.
+        const end=midi(note),start=groove.sub&&beat!==0?midi(note+(beat===14?7:2)):end;
+        this._tone(start,hit,duration,groove.sub?.105*energy:.065*energy,'sine','music',end);
+      }
+    }
+    const melodyActive=bar>=4&&(!build||phrase<30)&&(!bridge||beat%4===0);
+    if(melodyActive&&groove.notes.includes(beat)&&(full||beat%2===0||groove.sub)) {
+      const note=chord[0]+(motif[beat]??motif[(beat+1)%16]??7)+groove.register;
+      this._synth(note,hit,groove.air?.29:.13,.028*energy,groove.cutoff,beat%2?-.27:.27,groove.wave);
+      if(section==='climax'&&beat%4===0)this._tone(midi(note+12),time,.23,.009,'sine','music',midi(note+12),-.4);
+      if(groove.air&&beat%4===2)this._tone(midi(note+12),hit+SIXTEENTH*3,.24,.009,'sine','music',midi(note+12),-.36);
+    }
+    if(drop&&groove.breaks&&beat%4===2) {
+      const stab=chord[(beat/2+variation)%4]+(section==='climax'?12:0);
+      this._synth(stab,time,.1,.021,1800,beat%8<4?-.5:.5,'sawtooth');
+    }
+    // 항만은 스윙 힙합, 사막은 하프타임 트랩, 공장·설산은 끊어 치는 브레이크비트다.
+    const kicks=groove.kicks[bar%2];
+    if(reentry||((intro||bridge)&&style!=='mach-half'?beat===0||beat===8:!build&&kicks.includes(beat))) {
+      this._tone(groove.sub?132:154,hit,.19,.23*energy,'sine','music',groove.sub?39:43);
+      this._noise(hit,.025,.021*energy,4500,'music',900);
+    }
+    if(groove.snares.includes(beat)) {
+      this._noise(hit,.13,.09*energy,2150,'music',3200);
+      this._tone(185,hit,.1,.075*energy,'triangle','music',125);
+      if(groove.sub)this._noise(hit+.017,.065,.034*energy,3200,'music',1900);
+    }
+    if(full&&groove.breaks&&[7,11,15].includes(beat)&&bar%2===1)this._noise(hit,.043,.023,2200,'music');
+    if(!intro||beat%2===0) {
+      const open=drop&&(beat===3||beat===11);
+      this._noise(hit,open?.1:.031,(beat%2?.016:.012)*energy,open?6300:7900,'music',open?7800:7900);
+      if(groove.rolls&&full&&[7,15].includes(beat))for(const fraction of [1/3,2/3])this._noise(hit+SIXTEENTH*fraction,.018,.009*energy,8400,'music',6800);
+    }
+    // 빌드는 스네어 간격만 촘촘해진다. 박자와 진행 시간은 그대로다.
+    if(build&&(phrase<28?beat%4===0:phrase<30?beat%2===0:true))this._noise(time,.055,.025+(phrase-24)*.004,1400+(phrase-24)*360,'music',5000);
+    if((bar%8===7||build)&&beat>=14)this._tone(midi(root+24+(beat-14)*3),time,.09,.032,'triangle','music');
+    if(beat===0&&(bar%8===0||transition||section==='tunnel'&&bar%4===0))this._noise(time,.45,.036,6200,'music',2800);
   }
 
   _silenceMusic() {
